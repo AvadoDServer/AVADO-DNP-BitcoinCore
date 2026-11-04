@@ -40,11 +40,13 @@ CONTENT_TYPES = {
     ".json": "application/json",
 }
 
+# Only the AVADO Admin (my.ava.do) may show this page inside its own page (its "Setup"
+# tab frames the app page); any other site is refused. No X-Frame-Options: it
+# cannot name my.ava.do, and "DENY" left the Admin's Setup tab empty.
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
-    "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'self' http://my.ava.do https://my.ava.do; base-uri 'none'; form-action 'none'",
 }
 
 

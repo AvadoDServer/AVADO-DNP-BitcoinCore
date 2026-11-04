@@ -146,6 +146,18 @@ def needs_fresh_download(old_mode, new_mode):
     return old_mode == "pruned" and new_mode == "full"
 
 
+def remove_stale_txindex(chain_dir):
+    """A space-saving node runs with txindex=0, but Bitcoin Core leaves the old
+    transaction index of a full node on disk (tens of GB on mainnet). Delete it
+    so switching to the space-saving mode really frees the space."""
+    path = os.path.join(chain_dir, "indexes", "txindex")
+    if os.path.isdir(path):
+        log("space-saving mode: deleting the transaction index of the full node")
+        shutil.rmtree(path, ignore_errors=True)
+        return True
+    return False
+
+
 def rpcauth_line(user, password, salt=None):
     """bitcoin.conf rpcauth entry, as share/rpcauth/rpcauth.py makes it."""
     salt = salt or secrets.token_hex(16)
@@ -164,6 +176,17 @@ def load_logins(path=LOGINS_FILE):
     if changed:
         avadoweb.write_json(path, logins)
     return logins
+
+
+def time_left_text(progress, seconds_left):
+    """The time-left note under the download bar. The first blocks are small and
+    quick, so an estimate from the first percent said "89 days" on the test box;
+    until 10% is done the page gives the usual total instead."""
+    if progress < 0.10 or not seconds_left:
+        return "Usually 1 to 3 days in total"
+    if seconds_left > 14 * 86400:
+        return "More than 2 weeks left at this speed"
+    return "%s left" % avadoweb.human_duration(seconds_left)
 
 
 def prune_mib(gb):
@@ -351,6 +374,9 @@ class App:
         self.mode = mode
 
     def write_conf(self):
+        # Runs before every bitcoind start, so it also covers MODE=pruned set in the Admin.
+        if self.mode == "pruned":
+            remove_stale_txindex(self.chain_dir())
         avadoweb.write_text(CONF_FILE, render_conf(self.config, self.mode, self.logins), mode=0o600)
 
     # -- internal route for dependants
@@ -536,7 +562,7 @@ def build_model(info, config, state, rate, app=None, installed=None):
                     "percent": round(progress * 100, 2),
                     "left": "%.1f%% done, block %s of %s" % (progress * 100, fmt_int(blocks),
                                                              fmt_int(max(headers, blocks))),
-                    "right": ("%s left" % avadoweb.human_duration(left)) if left else "Working out how long this takes",
+                    "right": time_left_text(progress, left),
                 }
             text = ["Your node downloads every block since 2009 and checks each one itself. On an AVADO this takes "
                     "about 1 to 3 days. You can close this page: the download goes on."]

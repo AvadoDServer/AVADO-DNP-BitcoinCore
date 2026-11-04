@@ -137,13 +137,7 @@
     if (s.id) card.id = s.id;
     if (s.title) card.appendChild(el("h2", null, s.title));
     paragraphs(card, s.text);
-    if (s.steps && s.steps.length) {
-      var ol = el("ol", "steps");
-      s.steps.forEach(function (t) {
-        ol.appendChild(el("li", null, t));
-      });
-      card.appendChild(ol);
-    }
+    // Values first: the steps below refer to them ("the address and port above").
     if (s.fields && s.fields.length) {
       var fields = el("div", "fields");
       s.fields.forEach(function (f) {
@@ -161,6 +155,13 @@
         fields.appendChild(row);
       });
       card.appendChild(fields);
+    }
+    if (s.steps && s.steps.length) {
+      var ol = el("ol", "steps");
+      s.steps.forEach(function (t) {
+        ol.appendChild(el("li", null, t));
+      });
+      card.appendChild(ol);
     }
     paragraphs(card, s.after, "muted");
     var hasButtons = (s.buttons && s.buttons.length) || (s.links && s.links.length);

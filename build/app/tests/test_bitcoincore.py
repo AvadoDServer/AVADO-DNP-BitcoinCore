@@ -17,6 +17,21 @@ def config(**env):
     return main.Config(env)
 
 
+class StaleTxindexTest(unittest.TestCase):
+    """Seen on the test box: after "Switch to space-saving mode" indexes/txindex stayed."""
+
+    def test_removes_the_old_index_and_keeps_the_rest(self):
+        with tempfile.TemporaryDirectory() as d:
+            for sub in ("indexes/txindex", "indexes/blockfilter", "blocks", "chainstate"):
+                os.makedirs(os.path.join(d, sub))
+            open(os.path.join(d, "indexes/txindex/000001.ldb"), "w").close()
+            self.assertTrue(main.remove_stale_txindex(d))
+            self.assertFalse(os.path.exists(os.path.join(d, "indexes/txindex")))
+            for sub in ("indexes/blockfilter", "blocks", "chainstate"):
+                self.assertTrue(os.path.isdir(os.path.join(d, sub)), sub)
+            self.assertFalse(main.remove_stale_txindex(d))
+
+
 class DecideModeTest(unittest.TestCase):
     def test_auto_full_when_enough_space(self):
         self.assertEqual(main.decide_mode(config(), {}, 2000 * GB), ("full", "auto"))
@@ -210,6 +225,32 @@ class HostTest(unittest.TestCase):
         for host in ("evil.example", "my.ava.do.evil.example", "dappnodepackage-x.evil.example",
                      "dappnodepackage-bitcoincore.avado.dnp.dappnode.eth.evil.example", "", None):
             self.assertFalse(avadoweb.host_allowed(host), host)
+
+
+class TimeLeftTest(unittest.TestCase):
+    def test_no_wild_estimate_at_the_start(self):
+        # Seen on the test box: 0.0% done gave "about 89 days left".
+        self.assertEqual(main.time_left_text(0.0004, 89 * 86400), "Usually 1 to 3 days in total")
+
+    def test_no_estimate_yet(self):
+        self.assertEqual(main.time_left_text(0.5, None), "Usually 1 to 3 days in total")
+
+    def test_estimate_after_ten_percent(self):
+        self.assertIn("left", main.time_left_text(0.4, 20 * 3600))
+        self.assertNotIn("days in total", main.time_left_text(0.4, 20 * 3600))
+
+    def test_very_slow_node(self):
+        self.assertEqual(main.time_left_text(0.4, 40 * 86400), "More than 2 weeks left at this speed")
+
+
+class FramingTest(unittest.TestCase):
+    """The Admin's Setup tab shows this page in a frame; other sites may not."""
+
+    def test_only_the_admin_may_frame_the_page(self):
+        import avadoweb
+        csp = avadoweb.SECURITY_HEADERS["Content-Security-Policy"]
+        self.assertIn("frame-ancestors 'self' http://my.ava.do https://my.ava.do;", csp)
+        self.assertNotIn("X-Frame-Options", avadoweb.SECURITY_HEADERS)
 
 
 if __name__ == "__main__":
