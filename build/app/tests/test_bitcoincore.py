@@ -42,6 +42,13 @@ class DecideModeTest(unittest.TestCase):
         self.assertEqual(main.decide_mode(config(FULL_NODE_MIN_FREE_GB="900"), {}, 1000 * GB), ("full", "auto"))
 
 
+class FreshDownloadTest(unittest.TestCase):
+    def test_only_pruned_to_full_starts_again(self):
+        self.assertTrue(main.needs_fresh_download("pruned", "full"))
+        for old, new in (("full", "pruned"), ("full", "full"), ("pruned", "pruned"), (None, "full"), (None, "pruned")):
+            self.assertFalse(main.needs_fresh_download(old, new), (old, new))
+
+
 class ConfTest(unittest.TestCase):
     def setUp(self):
         self.logins = {app: {"user": app, "password": "pw-" + app, "salt": "00" * 16} for app in main.APPS}

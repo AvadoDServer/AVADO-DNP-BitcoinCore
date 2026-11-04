@@ -139,6 +139,13 @@ def decide_mode(config, state, free_bytes):
     return "pruned", "auto"
 
 
+def needs_fresh_download(old_mode, new_mode):
+    """A pruned node has thrown old blocks away; Bitcoin Core cannot become a full
+    node from it (it stops with "rebuild the database using -reindex"), so the
+    download starts again from nothing."""
+    return old_mode == "pruned" and new_mode == "full"
+
+
 def rpcauth_line(user, password, salt=None):
     """bitcoin.conf rpcauth entry, as share/rpcauth/rpcauth.py makes it."""
     salt = salt or secrets.token_hex(16)
@@ -332,6 +339,10 @@ class App:
     def decide(self):
         free, _total = avadoweb.disk_free(DATA_DIR)
         mode, reason = decide_mode(self.config, self.state, free)
+        if needs_fresh_download(self.state.get("mode"), mode):
+            # MODE=full was set in the AVADO Admin on a space-saving node.
+            log("MODE=full on a pruned node: deleting the pruned blocks to download the full history")
+            self.delete_chain()
         if self.state.get("mode") != mode or "decidedAt" not in self.state:
             self.state.update({"mode": mode, "reason": reason, "decidedAt": int(time.time()),
                                "freeAtDecision": free})
@@ -383,8 +394,7 @@ class App:
                 self.node.wanted = False
                 self.node.stop()
                 # A pruned node has thrown old blocks away: start the download again.
-                for sub in ("blocks", "chainstate", "indexes"):
-                    shutil.rmtree(os.path.join(self.chain_dir(), sub), ignore_errors=True)
+                self.delete_chain()
                 self.state.update({"mode": "full", "reason": "owner", "decidedAt": int(time.time())})
                 avadoweb.write_json(STATE_FILE, self.state)
                 self.mode = "full"
@@ -395,6 +405,11 @@ class App:
 
         threading.Thread(target=switch, daemon=True).start()
         return {"message": "Switching to the full node. It now downloads the whole Bitcoin history again."}
+
+    def delete_chain(self):
+        """Deletes the blocks, chain state and indexes (not bitcoin.conf or the logins)."""
+        for sub in ("blocks", "chainstate", "indexes"):
+            shutil.rmtree(os.path.join(self.chain_dir(), sub), ignore_errors=True)
 
     def chain_dir(self):
         return BTC_DIR if self.config.chain == "main" else os.path.join(BTC_DIR, self.config.chain)
