@@ -200,7 +200,8 @@ class HostTest(unittest.TestCase):
             self.assertTrue(avadoweb.host_allowed(host), host)
 
     def test_refused(self):
-        for host in ("evil.example", "my.ava.do.evil.example", "", None):
+        for host in ("evil.example", "my.ava.do.evil.example", "dappnodepackage-x.evil.example",
+                     "dappnodepackage-bitcoincore.avado.dnp.dappnode.eth.evil.example", "", None):
             self.assertFalse(avadoweb.host_allowed(host), host)
 
 

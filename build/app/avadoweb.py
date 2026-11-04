@@ -178,8 +178,10 @@ def host_allowed(host_header):
         return True
     except ValueError:
         pass
-    # Docker container and service names (other AVADO apps, health checks)
-    return host.endswith(".dappnode.eth") or host.startswith("dappnodepackage-")
+    # Docker container and service names of AVADO apps all end in .dappnode.eth.
+    # (A bare "dappnodepackage-" prefix is not enough: a rebinding site could
+    # use a name such as dappnodepackage-x.example.com.)
+    return host.endswith(".dappnode.eth")
 
 
 class UserError(Exception):
