@@ -17,6 +17,32 @@ def config(**env):
     return main.Config(env)
 
 
+def main_view_words(m):
+    """Words an owner sees without opening "Details" (same count as the Electrum Server's test)."""
+    parts = [m.get("headline")] + list(m.get("text") or [])
+    parts += [(m.get("progress") or {}).get(k) for k in ("left", "right")]
+    for f in m.get("facts") or []:
+        parts += [f["k"], f["v"]]
+    for s in m.get("sections") or []:
+        parts += [s.get("title")] + list(s.get("text") or []) + list(s.get("howto") or []) + list(s.get("steps") or [])
+        parts += [s.get("after")] if isinstance(s.get("after"), str) else list(s.get("after") or [])
+        for f in s.get("fields") or []:
+            parts += [f["k"], f["v"]] + (["Copy"] if f.get("copy") else [])
+        parts += [b["label"] for b in (s.get("links") or []) + (s.get("buttons") or [])]
+        if s.get("more") or s.get("advanced"):
+            parts.append(s.get("advancedTitle") or "Details")
+    return len(" ".join(p for p in parts if p).split())
+
+
+def details(m):
+    return [s for s in m["sections"] if s.get("id") == "details"][0]
+
+
+def details_text(m):
+    d = details(m)
+    return " ".join(" ".join(x.get("text") or []) + " ".join(x.get("steps") or []) for x in d["more"])
+
+
 class StaleTxindexTest(unittest.TestCase):
     """Seen on the test box: after "Switch to space-saving mode" indexes/txindex stayed."""
 
@@ -170,13 +196,15 @@ class ModelTest(unittest.TestCase):
         m = self.model({"running": True, "mode": "full", "free": 2000 * GB,
                         "chain": self.chain(blocks=0, headers=0, verificationprogress=0.0, size_on_disk=293),
                         "net": {"connections": 0}})
-        self.assertIn({"k": "Blocks checked", "v": "Just started"}, m["facts"])
-        self.assertNotIn("Disk used by the node", [f["k"] for f in m["facts"]])
+        adv = details(m)["advanced"]
+        self.assertIn({"k": "Blocks checked", "v": "Just started"}, adv)
+        self.assertNotIn("Disk used by the node", [f["k"] for f in adv])
         self.assertNotIn("293 bytes", repr(m))
         m = self.model({"running": True, "mode": "full", "free": 2000 * GB, "chain": self.chain(blocks=12),
                         "net": {"connections": 4}})
-        self.assertIn({"k": "Blocks checked", "v": "12"}, m["facts"])
-        self.assertIn("Disk used by the node", [f["k"] for f in m["facts"]])
+        adv = details(m)["advanced"]
+        self.assertIn({"k": "Blocks checked", "v": "12"}, adv)
+        self.assertIn("Disk used by the node", [f["k"] for f in adv])
 
     def test_synced_full_without_fulcrum_offers_store(self):
         m = self.model({"running": True, "mode": "full", "free": 1000 * GB,
@@ -196,10 +224,15 @@ class ModelTest(unittest.TestCase):
     def test_pruned_says_why_electrum_cannot_run(self):
         m = self.model({"running": True, "mode": "pruned", "free": 300 * GB, "chain": self.chain(pruned=True),
                         "net": {"connections": 8}})
-        text = " ".join(m["sections"][0]["text"])
-        self.assertIn("needs the full Bitcoin history", text)
-        self.assertIn("800 GB free", text)
-        self.assertNotIn("buttons", m["sections"][0])
+        connect = m["sections"][0]
+        self.assertEqual(connect["id"], "connect")  # the Electrum Server and Explorer pages link to #connect
+        text = " ".join(connect["text"])
+        self.assertIn("need the full Bitcoin history", text)
+        self.assertIn("Electrum Server", text)
+        self.assertIn("Bitcoin Explorer", text)
+        self.assertIn("300 GB free", text)
+        self.assertNotIn("buttons", connect)
+        self.assertIn("800 GB free when the node was set up", details_text(m))
 
     def test_pruned_offers_full_when_space_now_fits(self):
         m = self.model({"running": True, "mode": "pruned", "free": 1700 * GB, "chain": self.chain(pruned=True),
@@ -214,6 +247,61 @@ class ModelTest(unittest.TestCase):
                         "lastExit": {"why": "disk", "at": 0, "pause": 60}})
         self.assertEqual(m["state"], "error")
         self.assertIn("disk is full", m["headline"])
+        # the way out is the one card on top
+        self.assertEqual(m["sections"][0]["buttons"][0]["action"], "use-pruned")
+        self.assertNotIn("buttons", repr(details(m)["more"]))
+
+    def test_main_view_is_short(self):
+        """Status, progress and one action on top (about 120 words); the rest behind one "Details"."""
+        synced = {"blocks": 920000, "verificationprogress": 0.99999, "initialblockdownload": False}
+        cases = [
+            ({"mode": "full", "free": 2000 * GB, "chain": self.chain()}, {}),
+            ({"mode": "full", "free": 2000 * GB, "chain": self.chain(blocks=0, verificationprogress=0)}, {}),
+            ({"mode": "full", "free": 1000 * GB, "chain": self.chain(**synced)}, {}),
+            ({"mode": "full", "free": 1000 * GB, "chain": self.chain(**synced)}, {"fulcrum": True, "mempool": True}),
+            ({"mode": "pruned", "free": 300 * GB, "chain": self.chain(pruned=True)}, {}),
+            ({"mode": "pruned", "free": 1700 * GB, "chain": self.chain(pruned=True, **synced)}, {"mempool": True}),
+            ({"mode": "full", "free": 10 * GB, "chain": self.chain()}, {}),
+        ]
+        for info, installed in cases:
+            info = dict(info, running=True, net={"connections": 8, "subversion": "/Satoshi:32.1.0/"},
+                        mempool={"size": 5000})
+            m = self.model(info, installed=installed)
+            self.assertLessEqual(main_view_words(m), 120, (info["mode"], installed))
+            self.assertEqual([s["id"] for s in m["sections"]][-1], "details")
+            # one "Details", and only on the last card
+            self.assertEqual(sum(1 for s in m["sections"] if s.get("more") or s.get("advanced")), 1)
+            self.assertLessEqual(len(m["sections"]), 2)
+        m = self.model({"running": False, "mode": "full", "free": 1 * GB,
+                        "lastExit": {"why": "disk", "at": 0, "pause": 60}})
+        self.assertLessEqual(main_view_words(m), 120)
+
+    def test_switch_to_space_saving_is_in_details(self):
+        m = self.model({"running": True, "mode": "full", "free": 2000 * GB, "chain": self.chain(),
+                        "net": {"connections": 3}})
+        disk = [x for x in details(m)["more"] if x["title"] == "Disk space"][0]
+        button = disk["buttons"][0]
+        self.assertEqual(button["action"], "use-pruned")
+        self.assertIn("Bitcoin Explorer stop working", button["confirm"])
+        self.assertNotIn("buttons", m["sections"][0])
+        # MODE=full in the Admin: no button
+        m = self.model({"running": True, "mode": "full", "free": 2000 * GB, "chain": self.chain(),
+                        "net": {"connections": 3}}, MODE="full")
+        self.assertNotIn("buttons", repr(details(m)["more"]))
+
+    def test_space_saving_never_promises_the_explorer(self):
+        m = self.model({"running": True, "mode": "pruned", "free": 300 * GB, "chain": self.chain(pruned=True),
+                        "net": {"connections": 8}}, installed={"mempool": True})
+        explorer = [x for x in details(m)["more"] if x["title"] == "Bitcoin Explorer"][0]
+        self.assertIn("needs the full node", " ".join(explorer["text"]))
+        self.assertNotIn("links", explorer)
+        self.assertNotIn("mempool.my.ava.do", repr(m))
+
+    def test_wallet_steps_in_details(self):
+        m = self.model({"running": True, "mode": "full", "free": 2000 * GB, "chain": self.chain(),
+                        "net": {"connections": 3}})
+        self.assertNotIn("steps", m["sections"][0])
+        self.assertIn("Install \"Electrum Server\"", details_text(m))
 
     def test_warmup(self):
         m = self.model({"running": True, "mode": "full", "free": 1000 * GB, "warmup": "Loading block index…"})

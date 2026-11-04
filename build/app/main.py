@@ -505,26 +505,28 @@ def fmt_int(n):
 
 
 def build_model(info, config, state, rate, app=None, installed=None):
+    """The page: status, download progress and the one action that matters now on
+    top (about 120 words); everything else behind one "Details"."""
     installed = installed or {}
     mode = info.get("mode")
     free = info.get("free")
     chain = info.get("chain") or {}
     net = info.get("net") or {}
-    pruned_text = "space-saving mode: it keeps only the newest %d GB of blocks" % config.prune_gb
     model = {"title": "Bitcoin Node", "facts": [], "sections": [], "refresh": 10}
     network_note = "" if config.chain == "main" else " (test network: %s)" % config.chain
 
     synced = False
+    disk_full = False
     if not info.get("running"):
         last = info.get("lastExit") or {}
         why = last.get("why")
         wait = max(0, int(last.get("at", 0) + last.get("pause", 0) - time.time()))
         model["state"] = "error"
         if why == "disk":
+            disk_full = True
             model["headline"] = "Your Bitcoin node stopped: the disk is full"
-            model["text"] = ["There is not enough free space left on your AVADO (%s free). The node tries again by itself "
-                             "every few minutes." % avadoweb.human_bytes(free),
-                             "Make room by removing apps you no longer use, or switch the node to the space-saving mode below."]
+            model["text"] = ["Your AVADO has %s free. The node tries again by itself every few minutes. Make room by "
+                             "removing apps you no longer use." % avadoweb.human_bytes(free)]
         elif why == "database":
             model["headline"] = "Your Bitcoin node stopped: its block data is damaged"
             model["text"] = ["This can happen after a power cut. The node tries again by itself. If this message stays, "
@@ -565,53 +567,46 @@ def build_model(info, config, state, rate, app=None, installed=None):
                                                              fmt_int(max(headers, blocks))),
                     "right": time_left_text(progress, left),
                 }
-            text = ["Your node downloads every block since 2009 and checks each one itself. On an AVADO this takes "
-                    "about 1 to 3 days. You can close this page: the download goes on."]
-            if mode == "pruned":
-                text.append("It is in %s. It still downloads the whole history once (about 770 GB of internet "
-                            "traffic) to check it." % pruned_text)
-            model["text"] = text
+            model["text"] = ["It checks every block since 2009 itself. You can close this page: the download goes on."]
         else:
             synced = True
             model["state"] = "ok"
             model["headline"] = "Your Bitcoin node is up to date%s" % network_note
-            model["text"] = ["It has checked every block itself and follows the network as new blocks arrive "
-                             "(about every 10 minutes). Latest block: %s." % fmt_int(blocks)]
+            model["text"] = ["It has checked every block itself and follows new blocks as they arrive."]
         peers = net.get("connections")
         if peers == 0:
             if app is not None:
                 app.zero_peers_since = app.zero_peers_since or time.time()
                 if time.time() - app.zero_peers_since > 300:
                     model["state"] = "warn"
-                    model["text"].append("Your node cannot reach other Bitcoin nodes at the moment. Check that the "
-                                         "AVADO is connected to the internet.")
+                    model["text"].append("It cannot reach other Bitcoin nodes. Check that the AVADO is connected to "
+                                         "the internet.")
         elif app is not None:
             app.zero_peers_since = None
 
     if free is not None and free < 20 * GB and info.get("running"):
         model["state"] = "warn" if model.get("state") != "error" else "error"
-        model.setdefault("text", []).append("Your AVADO has only %s of free space left. When the disk is full the node "
-                                            "stops." % avadoweb.human_bytes(free))
+        model.setdefault("text", []).append("Only %s free on your AVADO. When the disk is full the node stops."
+                                            % avadoweb.human_bytes(free))
 
-    # facts
-    facts = model["facts"]
-    facts.append({"k": "Mode", "v": "Full node" if mode == "full" else "Space-saving (pruned)"})
-    if chain and not chain.get("blocks"):
-        # The first minutes: "0 blocks" and "293 bytes" read as broken.
-        facts.append({"k": "Blocks checked", "v": "Just started"})
-    elif chain:
-        facts.append({"k": "Blocks checked", "v": fmt_int(chain.get("blocks", 0))})
-        facts.append({"k": "Disk used by the node", "v": avadoweb.human_bytes(chain.get("size_on_disk"))})
+    model["facts"].append({"k": "Mode", "v": "Full node" if mode == "full" else "Space-saving"})
     if net:
         peers = net.get("connections") or 0
-        facts.append({"k": "Connected to", "v": "%d Bitcoin node%s" % (peers, "" if peers == 1 else "s"),
-                      "tone": "warn" if net.get("connections") == 0 else None})
-    facts.append({"k": "Free on your AVADO", "v": avadoweb.human_bytes(free),
-                  "tone": "warn" if free is not None and free < 50 * GB else None})
+        model["facts"].append({"k": "Connected to", "v": "%d Bitcoin node%s" % (peers, "" if peers == 1 else "s"),
+                               "tone": "warn" if net.get("connections") == 0 else None})
+    model["facts"].append({"k": "Free on your AVADO", "v": avadoweb.human_bytes(free),
+                           "tone": "warn" if free is not None and free < 50 * GB else None})
 
-    model["sections"].append(connect_section(mode, synced, state, config, installed, free))
-    model["sections"].append(explorer_section(installed))
-    model["sections"].append(settings_section(mode, state, config, info, free))
+    # The one action that matters now, then everything else behind "Details".
+    can_prune = mode == "full" and config.mode != "full"
+    connect = None
+    if disk_full:
+        if can_prune:
+            model["sections"].append(space_saving_card(config))
+    else:
+        connect = connect_section(mode, synced, config, installed, free)
+        model["sections"].append(connect)
+    model["sections"].append(details_section(mode, state, config, info, installed, connect, can_prune and not disk_full))
     return model
 
 
@@ -629,69 +624,97 @@ def warmup_text(message):
     return "getting ready"
 
 
-def connect_section(mode, synced, state, config, installed, free):
-    s = {"id": "connect", "title": "Connect your hardware wallet to your own node"}
+def space_saving_card(config):
+    return {"id": "space", "title": "Make room",
+            "text": ["Or switch to space-saving mode: the node then keeps only the newest %d GB of blocks." % config.prune_gb],
+            "buttons": [space_saving_button(config)]}
+
+
+def space_saving_button(config):
+    return {"action": "use-pruned", "label": "Switch to space-saving mode", "style": None,
+            "confirm": "Your node will delete old blocks and keep only the newest %d GB. The Electrum Server and the "
+                       "Bitcoin Explorer stop working: they need the full node. Going back later means downloading the "
+                       "whole history again (1 to 3 days). Continue?" % config.prune_gb}
+
+
+def connect_section(mode, synced, config, installed, free):
+    """The main action card. Its id "connect" is linked from the Electrum Server and Explorer pages."""
+    s = {"id": "connect"}
     if mode == "pruned":
         s["tone"] = "info"
-        at = state.get("freeAtDecision")
-        s["text"] = [
-            "Wallets such as Sparrow and Electrum connect to your node through the Electrum Server app. The Electrum Server "
-            "needs the full Bitcoin history, so it cannot run while your node is in space-saving mode.",
-        ]
-        if state.get("reason") == "auto" and at is not None:
-            s["text"].append("Your AVADO had %s free when the node was set up. The full node and the Electrum Server "
-                             "together need at least %s free." % (avadoweb.human_bytes(at),
-                                                                   avadoweb.human_bytes(config.full_min_free_gb * GB)))
+        s["title"] = "Get the full node"
+        need = avadoweb.human_bytes(config.full_min_free_gb * GB)
+        s["text"] = ["The Electrum Server (for hardware wallets) and the Bitcoin Explorer need the full Bitcoin "
+                     "history. The full node needs at least %s free." % need]
         if free is not None and free >= config.full_min_free_gb * GB and config.mode != "pruned":
-            s["text"].append("Your AVADO now has %s free, which is enough for the full node." % avadoweb.human_bytes(free))
+            s["text"].append("Your AVADO now has %s free: enough." % avadoweb.human_bytes(free))
             s["buttons"] = [{"action": "use-full", "label": "Switch to the full node", "style": "primary",
                              "confirm": "Your node will download the whole Bitcoin history again (about 770 GB). "
                                         "This takes 1 to 3 days. Continue?"}]
+        else:
+            s["text"].append("Your AVADO has %s free." % avadoweb.human_bytes(free))
         return s
+    s["title"] = "Connect your hardware wallet"
     if installed.get("fulcrum"):
-        s["text"] = ["Your Electrum Server is installed. Its page shows the exact address to type into Sparrow or Electrum."]
+        s["text"] = ["The Electrum Server page shows the address to type into Sparrow or Electrum."]
         s["links"] = [{"label": "Open the Electrum Server page", "href": "http://fulcrum.my.ava.do", "style": "primary"}]
     else:
-        s["text"] = ["Wallets such as Sparrow and Electrum connect to your node through the Electrum Server app. Then "
-                     "your wallet asks your own node about your coins instead of a stranger's server."]
-        s["steps"] = ["Open the AVADO store (the DApp Store in the Admin).",
-                      "Install \"Electrum Server\" from the Bitcoin category.",
-                      "Open its page: it shows the address to type into your wallet."]
-        s["links"] = [{"label": "Open the AVADO store", "href": "http://my.ava.do/#/installer", "style": "primary"}]
+        s["text"] = ["Install the Electrum Server from the AVADO store. Your wallet then asks your own node about your "
+                     "coins, not a stranger's server."]
         if not synced:
-            s["after"] = "You can install it now. It starts working when your node has finished downloading."
+            s["text"].append("It starts working when the download is done.")
+        s["links"] = [{"label": "Open the AVADO store", "href": "http://my.ava.do/#/installer", "style": "primary"}]
     return s
 
 
-def explorer_section(installed):
-    s = {"id": "explorer", "title": "See blocks, fees and your own transactions"}
-    if installed.get("mempool"):
-        s["text"] = ["The Bitcoin Explorer on your AVADO looks things up on your own node, so no website learns "
-                     "which addresses you look at."]
-        s["links"] = [{"label": "Open the Bitcoin Explorer", "href": "http://mempool.my.ava.do/avado/", "style": None}]
-    else:
-        s["text"] = ["Install the Bitcoin Explorer (mempool) from the AVADO store to see the current fees, new blocks "
-                     "and your own transactions, looked up on your own node instead of a website."]
-    return s
-
-
-def settings_section(mode, state, config, info, free):
+def details_section(mode, state, config, info, installed, connect, offer_pruned):
+    """One "Details" card: wallet steps, the Explorer, disk space, the numbers."""
     chain = info.get("chain") or {}
     net = info.get("net") or {}
-    s = {"id": "settings", "title": "Disk space"}
-    if mode == "full":
-        s["text"] = ["Your node keeps the full Bitcoin history and an index of all transactions (about 850 GB, "
-                     "growing about 70 GB a year). This lets the Electrum Server run on it."]
-        if config.mode != "full":
-            s["buttons"] = [{"action": "use-pruned", "label": "Switch to space-saving mode", "style": None,
-                             "confirm": "Your node will delete old blocks and keep only the newest %d GB. The Electrum "
-                                        "Server stops working. Going back later means downloading the whole history "
-                                        "again (1 to 3 days). Continue?" % config.prune_gb}]
+    more = []
+    if mode == "full" and connect is not None and not installed.get("fulcrum"):
+        more.append({"title": "Connect a wallet, step by step", "steps": [
+            "Open the AVADO store (the DApp Store in the Admin).",
+            "Install \"Electrum Server\" from the Bitcoin category.",
+            "Open its page: it shows the address to type into your wallet."]})
+
+    explorer = {"title": "Bitcoin Explorer"}
+    if mode != "full":
+        explorer["text"] = ["Shows fees, new blocks and your own transactions. Like the Electrum Server, it needs the "
+                            "full node."]
+    elif installed.get("mempool"):
+        explorer["text"] = ["Shows fees, new blocks and your own transactions, looked up on your own node, so no "
+                            "website learns which addresses you look at."]
+        explorer["links"] = [{"label": "Open the Bitcoin Explorer", "href": "http://mempool.my.ava.do/avado/",
+                              "style": None}]
     else:
-        s["text"] = ["Your node is in space-saving mode: it keeps only the newest %d GB of blocks (about %d GB on disk "
-                     "in total). It still checks every block and transaction itself." % (config.prune_gb,
-                                                                                          config.prune_gb + 12)]
-    adv = [
+        explorer["text"] = ["Install the Bitcoin Explorer from the AVADO store to see fees, new blocks and your own "
+                            "transactions, looked up on your own node instead of a website."]
+    more.append(explorer)
+
+    disk = {"title": "Disk space"}
+    if mode == "full":
+        disk["text"] = ["Your node keeps the full Bitcoin history and an index of all transactions (about 850 GB, "
+                        "growing about 70 GB a year). The Electrum Server and the Bitcoin Explorer need this."]
+        if offer_pruned:
+            disk["buttons"] = [space_saving_button(config)]
+    else:
+        disk["text"] = ["Your node is in space-saving mode: it keeps only the newest %d GB of blocks (about %d GB on "
+                        "disk in total). It still checks every block and transaction itself, and downloads the whole "
+                        "history once (about 770 GB of internet traffic) to do so." % (config.prune_gb,
+                                                                                         config.prune_gb + 12)]
+        at = state.get("freeAtDecision")
+        if state.get("reason") == "auto" and at is not None:
+            disk["text"].append("Your AVADO had %s free when the node was set up." % avadoweb.human_bytes(at))
+    more.append(disk)
+
+    adv = []
+    if chain:
+        adv.append({"k": "Blocks checked", "v": fmt_int(chain["blocks"]) if chain.get("blocks") else "Just started"})
+        if chain.get("blocks"):
+            # The first minutes: "293 bytes" reads as broken.
+            adv.append({"k": "Disk used by the node", "v": avadoweb.human_bytes(chain.get("size_on_disk"))})
+    adv += [
         {"k": "Network", "v": {"main": "Bitcoin (mainnet)"}.get(config.chain, config.chain)},
         {"k": "Bitcoin Core version", "v": (net.get("subversion") or "").strip("/").replace(":", " ") or "Unknown"},
         {"k": "Mode chosen", "v": {"auto": "Automatically, from the free disk space", "owner": "By you, on this page",
@@ -707,8 +730,7 @@ def settings_section(mode, state, config, info, free):
     mempool = info.get("mempool") or {}
     if mempool:
         adv.append({"k": "Transactions waiting", "v": fmt_int(mempool.get("size", 0))})
-    s["advanced"] = adv
-    return s
+    return {"id": "details", "more": more, "advanced": adv}
 
 
 if __name__ == "__main__":

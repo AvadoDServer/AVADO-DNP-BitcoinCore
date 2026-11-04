@@ -10,14 +10,14 @@ It is the base of the AVADO Bitcoin bundle:
 |---|---|---|
 | Bitcoin Node (`bitcoincore.avado.dnp.dappnode.eth`) | this one | nothing |
 | Electrum Server (`fulcrum.avado.dnp.dappnode.eth`) | AVADO-DNP-Fulcrum | Bitcoin Node, full mode |
-| Bitcoin Explorer (`mempool.avado.dnp.dappnode.eth`) | AVADO-DNP-Mempool | Bitcoin Node (full or pruned) |
+| Bitcoin Explorer (`mempool.avado.dnp.dappnode.eth`) | AVADO-DNP-Mempool | Bitcoin Node, full mode |
 
 ## What it does
 
 - **Full or space-saving, chosen from the free disk.** On the first start
   (`MODE=auto`) the node keeps the full history and a transaction index when
   the box has at least `FULL_NODE_MIN_FREE_GB` (1500 GB) free, which is what the
-  Electrum Server needs. With less it starts pruned (`PRUNE_GB`, 10 GB of
+  Electrum Server and the explorer need. With less it starts pruned (`PRUNE_GB`, 10 GB of
   blocks). The choice is remembered; the page has a button to switch either
   way (switching to full downloads the history again and is only offered when
   it fits). `MODE=full` or `MODE=pruned` in the Admin overrides both.
@@ -32,9 +32,12 @@ It is the base of the AVADO Bitcoin bundle:
   answers only when the request comes from that app's own container (the
   caller's address is checked against Docker's DNS for the app's container
   name); any other caller gets 403. The page never shows a login.
-- **The page** shows the download progress, disk use, peers and what to do
-  next ("connect your hardware wallet" through the Electrum Server, the
-  explorer). `/api/*` answers only requests addressed to the box (a
+- **The page** keeps the main view short (about 120 words, checked by a unit
+  test): the status, the download progress and the one action that matters
+  now ("Connect your hardware wallet" through the Electrum Server, or "Switch
+  to the full node" on a space-saving node, whose card is `#connect`). The
+  wallet steps, the explorer, disk space with "Switch to space-saving mode",
+  and the numbers are behind one "Details". `/api/*` answers only requests addressed to the box (a
   `*.my.ava.do` name or an IP), buttons need the `X-Avado: 1` header, and the
   Content-Security-Policy allows no inline or foreign scripts.
 - **Keeps bitcoind running** and says in plain words why it stopped (disk

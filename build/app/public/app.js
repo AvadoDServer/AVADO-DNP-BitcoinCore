@@ -96,6 +96,30 @@
       });
   }
 
+  // Links and action buttons in one row ("btns"); used by cards and by "Details" boxes.
+  function renderButtons(parent, links, buttons) {
+    if (!(links && links.length) && !(buttons && buttons.length)) return;
+    var btns = el("div", "btns");
+    (links || []).forEach(function (l) {
+      var a = el("a", "btn" + (l.style ? " " + l.style : ""), l.label);
+      a.href = l.href;
+      if (/^https?:/.test(l.href) && l.external) {
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+      }
+      btns.appendChild(a);
+    });
+    (buttons || []).forEach(function (spec) {
+      var b = el("button", spec.style || null, spec.label);
+      b.type = "button";
+      b.addEventListener("click", function () {
+        runAction(b, spec);
+      });
+      btns.appendChild(b);
+    });
+    parent.appendChild(btns);
+  }
+
   function renderHero(model) {
     var card = el("section", "card hero state-" + (model.state || "working"));
     card.appendChild(el("span", "dot"));
@@ -166,29 +190,8 @@
       card.appendChild(ol);
     }
     paragraphs(card, s.after, "muted");
-    var hasButtons = (s.buttons && s.buttons.length) || (s.links && s.links.length);
-    if (hasButtons) {
-      var btns = el("div", "btns");
-      (s.links || []).forEach(function (l) {
-        var a = el("a", "btn" + (l.style ? " " + l.style : ""), l.label);
-        a.href = l.href;
-        if (/^https?:/.test(l.href) && l.external) {
-          a.target = "_blank";
-          a.rel = "noopener noreferrer";
-        }
-        btns.appendChild(a);
-      });
-      (s.buttons || []).forEach(function (spec) {
-        var b = el("button", spec.style || null, spec.label);
-        b.type = "button";
-        b.addEventListener("click", function () {
-          runAction(b, spec);
-        });
-        btns.appendChild(b);
-      });
-      card.appendChild(btns);
-    }
-    // "Details": extra steps and notes ("more"), then a table ("advanced"), folded away.
+    renderButtons(card, s.links, s.buttons);
+    // "Details": extra steps, notes and buttons ("more"), then a table ("advanced"), folded away.
     var more = s.more || [];
     var adv = s.advanced || [];
     if (more.length || adv.length) {
@@ -205,6 +208,7 @@
           });
           box.appendChild(list);
         }
+        renderButtons(box, m.links, m.buttons);
         det.appendChild(box);
       });
       if (adv.length) {
