@@ -9,6 +9,7 @@
   var main = document.getElementById("main");
   var timer = null;
   var busy = false;
+  var scrolled = false;
 
   function el(tag, cls, text) {
     var node = document.createElement(tag);
@@ -156,6 +157,7 @@
       });
       card.appendChild(fields);
     }
+    paragraphs(card, s.howto);
     if (s.steps && s.steps.length) {
       var ol = el("ol", "steps");
       s.steps.forEach(function (t) {
@@ -186,17 +188,35 @@
       });
       card.appendChild(btns);
     }
-    if (s.advanced && s.advanced.length) {
+    // "Details": extra steps and notes ("more"), then a table ("advanced"), folded away.
+    var more = s.more || [];
+    var adv = s.advanced || [];
+    if (more.length || adv.length) {
       var det = el("details", "adv");
       det.appendChild(el("summary", null, s.advancedTitle || "Details"));
-      var table = el("table", "kv");
-      s.advanced.forEach(function (row) {
-        var tr = el("tr");
-        tr.appendChild(el("td", null, row.k));
-        tr.appendChild(el("td", null, row.v));
-        table.appendChild(tr);
+      more.forEach(function (m) {
+        var box = el("div", "more");
+        if (m.title) box.appendChild(el("h3", null, m.title));
+        paragraphs(box, m.text);
+        if (m.steps && m.steps.length) {
+          var list = el("ol", "steps");
+          m.steps.forEach(function (t) {
+            list.appendChild(el("li", null, t));
+          });
+          box.appendChild(list);
+        }
+        det.appendChild(box);
       });
-      det.appendChild(table);
+      if (adv.length) {
+        var table = el("table", "kv");
+        adv.forEach(function (row) {
+          var tr = el("tr");
+          tr.appendChild(el("td", null, row.k));
+          tr.appendChild(el("td", null, row.v));
+          table.appendChild(tr);
+        });
+        det.appendChild(table);
+      }
       card.appendChild(det);
     }
     return card;
@@ -223,6 +243,12 @@
       frag.appendChild(card);
     });
     main.replaceChildren(frag);
+    // A link from another AVADO page can point at one card (#connect): show it once.
+    if (!scrolled) {
+      scrolled = true;
+      var target = /^#[A-Za-z][\w-]*$/.test(location.hash) && document.getElementById(location.hash.slice(1));
+      if (target) target.scrollIntoView({ block: "start" });
+    }
     schedule(model.refresh || 10);
   }
 

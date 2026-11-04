@@ -554,7 +554,8 @@ def build_model(info, config, state, rate, app=None, installed=None):
                 # First the node fetches the list of all blocks (headers), then the blocks themselves.
                 model["progress"] = {
                     "percent": 0,
-                    "left": "Getting the list of all blocks first (%s so far)" % fmt_int(headers),
+                    "left": ("Getting the list of all blocks first (%s so far)" % fmt_int(headers)) if headers
+                            else "Getting the list of all blocks first",
                     "right": "Then the blocks themselves",
                 }
             else:
@@ -595,7 +596,10 @@ def build_model(info, config, state, rate, app=None, installed=None):
     # facts
     facts = model["facts"]
     facts.append({"k": "Mode", "v": "Full node" if mode == "full" else "Space-saving (pruned)"})
-    if chain:
+    if chain and not chain.get("blocks"):
+        # The first minutes: "0 blocks" and "293 bytes" read as broken.
+        facts.append({"k": "Blocks checked", "v": "Just started"})
+    elif chain:
         facts.append({"k": "Blocks checked", "v": fmt_int(chain.get("blocks", 0))})
         facts.append({"k": "Disk used by the node", "v": avadoweb.human_bytes(chain.get("size_on_disk"))})
     if net:

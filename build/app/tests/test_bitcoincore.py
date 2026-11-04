@@ -166,6 +166,18 @@ class ModelTest(unittest.TestCase):
         self.assertIn("632,600", m["progress"]["left"])
         self.assertIn({"k": "Connected to", "v": "1 Bitcoin node", "tone": None}, m["facts"])
 
+    def test_first_minutes_say_just_started(self):
+        m = self.model({"running": True, "mode": "full", "free": 2000 * GB,
+                        "chain": self.chain(blocks=0, headers=0, verificationprogress=0.0, size_on_disk=293),
+                        "net": {"connections": 0}})
+        self.assertIn({"k": "Blocks checked", "v": "Just started"}, m["facts"])
+        self.assertNotIn("Disk used by the node", [f["k"] for f in m["facts"]])
+        self.assertNotIn("293 bytes", repr(m))
+        m = self.model({"running": True, "mode": "full", "free": 2000 * GB, "chain": self.chain(blocks=12),
+                        "net": {"connections": 4}})
+        self.assertIn({"k": "Blocks checked", "v": "12"}, m["facts"])
+        self.assertIn("Disk used by the node", [f["k"] for f in m["facts"]])
+
     def test_synced_full_without_fulcrum_offers_store(self):
         m = self.model({"running": True, "mode": "full", "free": 1000 * GB,
                         "chain": self.chain(blocks=920000, verificationprogress=0.99999, initialblockdownload=False),

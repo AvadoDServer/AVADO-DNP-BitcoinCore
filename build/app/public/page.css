@@ -65,6 +65,8 @@ button.small { padding: 4px 10px; font-size: 12.5px; }
 button:disabled { opacity: 0.55; cursor: not-allowed; }
 details.adv { margin-top: 4px; }
 details.adv summary { cursor: pointer; color: rgb(var(--fg-muted)); font-weight: 600; }
+details.adv .more { margin-top: 12px; }
+details.adv .more h3 { margin: 0 0 4px; font-size: 14.5px; }
 table.kv { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13.5px; }
 table.kv td { padding: 6px 0; border-bottom: 1px solid rgb(var(--border)); vertical-align: top; }
 table.kv td:first-child { color: rgb(var(--fg-muted)); width: 42%; padding-right: 12px; }
