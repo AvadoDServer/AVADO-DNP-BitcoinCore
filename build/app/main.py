@@ -180,6 +180,8 @@ def render_conf(config, mode, logins):
         "prune=%d" % (prune_mib(config.prune_gb) if mode == "pruned" else 0),
         "listen=1",
         "natpmp=0",
+        # No Tor on AVADO: do not look for a Tor control port (log noise every few minutes).
+        "listenonion=0",
         "rpcallowip=127.0.0.1",
     ]
     lines += ["rpcallowip=%s" % net for net in config.rpc_allow]

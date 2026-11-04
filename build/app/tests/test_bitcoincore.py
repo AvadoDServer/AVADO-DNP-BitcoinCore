@@ -65,6 +65,7 @@ class ConfTest(unittest.TestCase):
         # No log file inside the volume (it would grow without limit); the container log is enough.
         self.assertIn("nodebuglogfile=1", conf)
         self.assertNotIn("debuglogfile=0", conf)
+        self.assertIn("listenonion=0", conf)
 
     def test_pruned_conf(self):
         conf = main.render_conf(config(PRUNE_GB="10"), "pruned", self.logins)
