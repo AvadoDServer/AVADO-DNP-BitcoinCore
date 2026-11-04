@@ -1,0 +1,7 @@
+# Build context is the repository root; send only what build/Dockerfile uses.
+*
+!dappnode_package.json
+!build/
+**/__pycache__
+**/*.pyc
+**/.DS_Store
