@@ -73,3 +73,7 @@ table.kv td:first-child { color: rgb(var(--fg-muted)); width: 42%; padding-right
 table.kv td:last-child { overflow-wrap: anywhere; }
 .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: rgb(var(--surface-raised)); border: 1px solid rgb(var(--border-strong)); border-radius: var(--radius-control); padding: 10px 16px; box-shadow: var(--shadow-lg); max-width: calc(100% - 32px); }
 @media (max-width: 520px) { .card { padding: 16px; } .hero h1 { font-size: 19px; } .field .k { min-width: 0; width: 100%; } }
+.confirm { margin-top: 12px; padding: 14px 16px; border-radius: var(--radius-control); border: 1px solid rgb(var(--warning) / 0.6); background: rgb(var(--warning-subtle)); }
+.confirm p { margin: 0; font-weight: 600; }
+.confirm .btns { margin-top: 12px; }
+[hidden] { display: none !important; }

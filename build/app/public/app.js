@@ -10,6 +10,7 @@
   var timer = null;
   var busy = false;
   var scrolled = false;
+  var asking = null; // an in-page "are you sure?" that is open (kept until answered)
 
   function el(tag, cls, text) {
     var node = document.createElement(tag);
@@ -67,9 +68,59 @@
     area.remove();
   }
 
-  function runAction(button, spec) {
+  // Asks "are you sure?" on the page, under the button. No browser pop-ups
+  // (confirm/alert/prompt): they can freeze the browser, and Enter pressed
+  // them. Cancel has the focus, so Enter or Escape cancels.
+  function askConfirm(button, spec) {
+    closeConfirm();
+    var row = button.closest(".btns") || button.parentNode;
+    var box = el("div", "confirm");
+    box.setAttribute("role", "alertdialog");
+    box.setAttribute("aria-label", spec.label || "Are you sure?");
+    var text = el("p", null, spec.confirm);
+    text.id = "confirm-text";
+    box.setAttribute("aria-describedby", text.id);
+    box.appendChild(text);
+    var btns = el("div", "btns");
+    var label = spec.label ? spec.label.charAt(0).toLowerCase() + spec.label.slice(1) : "continue";
+    var yes = el("button", spec.style === "danger" ? "danger" : "primary", spec.confirmLabel || "Yes, " + label);
+    yes.type = "button";
+    var no = el("button", null, "Cancel");
+    no.type = "button";
+    yes.addEventListener("click", function () {
+      closeConfirm();
+      runAction(button, spec, true);
+    });
+    no.addEventListener("click", function () {
+      closeConfirm();
+      if (document.body.contains(button)) button.focus();
+    });
+    box.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") no.click();
+    });
+    btns.appendChild(yes);
+    btns.appendChild(no);
+    box.appendChild(btns);
+    row.parentNode.insertBefore(box, row.nextSibling);
+    row.hidden = true;
+    asking = { box: box, row: row };
+    no.focus();
+    box.scrollIntoView({ block: "nearest" });
+  }
+
+  function closeConfirm() {
+    if (!asking) return;
+    asking.box.remove();
+    asking.row.hidden = false;
+    asking = null;
+  }
+
+  function runAction(button, spec, confirmed) {
     if (busy) return;
-    if (spec.confirm && !window.confirm(spec.confirm)) return;
+    if (spec.confirm && !confirmed) {
+      askConfirm(button, spec);
+      return;
+    }
     busy = true;
     button.disabled = true;
     fetch("api/action/" + encodeURIComponent(spec.action), {
@@ -262,6 +313,11 @@
   }
 
   function load() {
+    // Do not redraw while the owner answers an "are you sure?" (it would vanish).
+    if (asking && main.contains(asking.box)) {
+      schedule(10);
+      return;
+    }
     fetch("api/status", { cache: "no-store" })
       .then(function (resp) {
         if (!resp.ok) throw new Error("HTTP " + resp.status);
