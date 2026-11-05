@@ -12,9 +12,11 @@ ARG DEBIAN_IMAGE=debian:bookworm-20261027-slim@sha256:99c0b25c46d0214d5a2091092e
 FROM --platform=linux/amd64 ${DEBIAN_IMAGE} AS bitcoin
 # The official release from bitcoincore.org. The SHA-256 below is the line for
 # this file in the release's SHA256SUMS, whose signature was checked with gpg
-# against the builder keys in github.com/bitcoin-core/guix.sigs (8 good
-# signatures for 32.1, among them fanquake, achow101 and Sjors). A different
-# download fails the build. To update: change both lines together.
+# against the builder keys in github.com/bitcoin-core/guix.sigs (at least 5
+# good signatures; 8 for 32.1, among them fanquake, achow101 and Sjors). A
+# different download fails the build. To update: change both lines together.
+# The weekly upstream check (.github/workflows/upstream-check.yml) does this
+# check for each new version and lists the signers in its PR.
 ARG BITCOIN_VERSION=32.1
 ARG BITCOIN_SHA256=61545c17c3120fb7412f896d248b11993af04ec8817aad3649c55b2afb044963
 RUN apt-get update \
