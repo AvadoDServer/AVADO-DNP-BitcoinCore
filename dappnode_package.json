@@ -30,5 +30,6 @@
   "links": {
     "OnboardingWizard": "http://bitcoincore.my.ava.do",
     "HomePage": "https://bitcoincore.org"
-  }
+  },
+  "avatar": "/ipfs/QmRS2feKaRdtzVF51z76C96F9bHHWPRMGDQK8jXzt4uHLD"
 }
