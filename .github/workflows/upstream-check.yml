@@ -1,0 +1,31 @@
+name: Upstream check
+# Once a week: is a newer stable upstream release out than the one this package
+# pins? If so, open (or update) one PR that moves the version, the image digests
+# or checksums and the package version. The owner reviews and merges it.
+# Settings: .github/upstream-check.json. Dry run on a laptop:
+#   node .github/scripts/upstream-check.mjs
+on:
+  schedule: [{ cron: "0 6 * * 1" }]
+  workflow_dispatch:
+permissions: { contents: write, pull-requests: write }
+concurrency: { group: upstream-check }
+jobs:
+  check:
+    # A manual run from another branch must never open a PR from unmerged work.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - id: check
+        run: node .github/scripts/upstream-check.mjs --write
+        env: { GITHUB_TOKEN: "${{ github.token }}" }
+      # With no change this opens nothing and removes a leftover upstream-check branch.
+      - name: Open or update the PR
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: upstream-check
+          commit-message: ${{ steps.check.outputs.title }}
+          title: ${{ steps.check.outputs.title }}
+          body-path: ${{ runner.temp }}/upstream-check.md
+          delete-branch: true

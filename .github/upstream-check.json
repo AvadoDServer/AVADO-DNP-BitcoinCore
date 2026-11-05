@@ -1,0 +1,32 @@
+{
+  "title": "Bitcoin Node",
+  "components": [
+    {
+      "name": "Bitcoin Core",
+      "github": "bitcoin/bitcoin",
+      "notes": "https://bitcoincore.org/en/releases/{version}/",
+      "checksums": [
+        {
+          "var": "sha",
+          "sums": "https://bitcoincore.org/bin/bitcoin-core-{version}/SHA256SUMS",
+          "file": "bitcoin-{version}-x86_64-linux-gnu.tar.gz",
+          "gpg": {
+            "keys": "bitcoin-core/guix.sigs",
+            "path": "builder-keys",
+            "min": 5
+          }
+        }
+      ],
+      "pins": [
+        {
+          "file": "build/Dockerfile",
+          "text": "ARG BITCOIN_VERSION={version}\nARG BITCOIN_SHA256={sha}\n"
+        },
+        {
+          "file": "dappnode_package.json",
+          "text": "\"upstream\": \"v{version}\""
+        }
+      ]
+    }
+  ]
+}
