@@ -11,6 +11,7 @@ It is the base of the AVADO Bitcoin bundle:
 | Bitcoin Node (`bitcoincore.avado.dnp.dappnode.eth`) | this one | nothing |
 | Electrum Server (`fulcrum.avado.dnp.dappnode.eth`) | AVADO-DNP-Fulcrum | Bitcoin Node, full mode |
 | Bitcoin Explorer (`mempool.avado.dnp.dappnode.eth`) | AVADO-DNP-Mempool | Bitcoin Node, full mode |
+| Lightning (`lightning.avado.dnp.dappnode.eth`) | AVADO-DNP-Lightning | Bitcoin Node, full mode, ZMQ |
 
 ## What it does
 
@@ -44,7 +45,10 @@ It is the base of the AVADO Bitcoin bundle:
   full, damaged database). Logs go to the container log only.
 
 Ports: 8333 is published so other Bitcoin nodes can connect. RPC (8332) and
-ZMQ (28332/28333) stay inside the AVADO network.
+ZMQ stay inside the AVADO network: new blocks (`zmqpubhashblock`,
+`zmqpubrawblock`) on 28332 and new transactions (`zmqpubrawtx`) on 28333, two
+different addresses as LND requires. Lightning gets its own login like the
+other apps; it may also call `getzmqnotifications` to find these addresses.
 
 Settings (Admin, package page): `MODE` (auto/full/pruned), `PRUNE_GB`,
 `FULL_NODE_MIN_FREE_GB`, `DBCACHE_MB`, `EXTRA_OPTS` (extra bitcoind options for

@@ -130,6 +130,19 @@ class ConfTest(unittest.TestCase):
         for app, spec in main.APPS.items():
             self.assertFalse(dangerous & set(spec["methods"]), app)
 
+    def test_lightning_gets_zmq_and_its_own_login(self):
+        # LND needs raw blocks and raw transactions over ZMQ, on two different addresses.
+        conf = main.render_conf(config(), "full", self.logins)
+        self.assertIn("zmqpubrawblock=tcp://0.0.0.0:28332", conf)
+        self.assertIn("zmqpubrawtx=tcp://0.0.0.0:28333", conf)
+        lnd = main.APPS["lnd"]
+        self.assertIn("DAppNodePackage-lightning.avado.dnp.dappnode.eth", lnd["hosts"])
+        for method in ("getblockchaininfo", "getnetworkinfo", "getzmqnotifications", "estimatesmartfee",
+                       "sendrawtransaction", "testmempoolaccept", "getrawtransaction", "gettxout", "getinfo",
+                       "getdeploymentinfo", "gettxspendingprevout", "getblockheader", "getmempoolinfo"):
+            self.assertIn(method, lnd["methods"])
+        self.assertIn("rpcwhitelist=lnd:", conf)
+
     def test_page_login_is_read_only(self):
         self.assertNotIn("sendrawtransaction", main.APPS["avado"]["methods"])
 

@@ -3,8 +3,8 @@
 
 - Chooses a full or a space-saving (pruned) node from the free disk space the
   first time it starts (MODE=auto), and remembers the choice.
-- Makes one RPC login per app (this page, the Electrum server, the explorer)
-  with a random password, stored only in this app's volume. bitcoin.conf holds
+- Makes one RPC login per app (this page, the Electrum server, the explorer,
+  Lightning) with a random password, stored only in this app's volume. bitcoin.conf holds
   salted hashes (rpcauth), never the passwords. Each login may call only the
   RPC methods that app needs (rpcwhitelist).
 - Gives an app its login only when the request comes from that app's own
@@ -73,6 +73,15 @@ APPS = {
                 "methods": COMMON_READ + BROADCAST + [
                     "getnetworkhashps", "gettxoutsetinfo", "getmininginfo", "getchaintxstats", "ping",
                     "getconnectioncount", "getblockfilter"]},
+    # Lightning (LND 0.21): its chain backend, wallet and fee estimator. Taken from a -debug=rpc run
+    # on regtest (wallet made, unlocked, funded, channel opened, paid, restarted, restored from the
+    # words and the channel backup with a force close). "getinfo" is btcd's: LND calls it to tell
+    # btcd from bitcoind and needs bitcoind's "method not found", not a refusal. getdeploymentinfo:
+    # LND checks taproot. gettxspendingprevout: LND watches spends in the mempool.
+    # getzmqnotifications: the Lightning app checks the ZMQ addresses before it starts LND.
+    "lnd": {"hosts": ["DAppNodePackage-lightning.avado.dnp.dappnode.eth", "lightning.avado.dnp.dappnode.eth"],
+            "methods": COMMON_READ + BROADCAST + ["getinfo", "getdeploymentinfo", "gettxspendingprevout",
+                                                  "getzmqnotifications"]},
 }
 
 
@@ -632,9 +641,10 @@ def space_saving_card(config):
 
 def space_saving_button(config):
     return {"action": "use-pruned", "label": "Switch to space-saving mode", "style": None,
-            "confirm": "Your node will delete old blocks and keep only the newest %d GB. The Electrum Server and the "
-                       "Bitcoin Explorer stop working: they need the full node. Going back later means downloading the "
-                       "whole history again (1 to 3 days). Continue?" % config.prune_gb}
+            "confirm": "Your node will delete old blocks and keep only the newest %d GB. The Electrum Server, "
+                       "Lightning and the Bitcoin Explorer stop working: they need the full node (close your Lightning "
+                       "channels first). Going back later means downloading the whole history again (1 to 3 days). "
+                       "Continue?" % config.prune_gb}
 
 
 def connect_section(mode, synced, config, installed, free):
@@ -644,8 +654,8 @@ def connect_section(mode, synced, config, installed, free):
         s["tone"] = "info"
         s["title"] = "Get the full node"
         need = avadoweb.human_bytes(config.full_min_free_gb * GB)
-        s["text"] = ["The Electrum Server (for hardware wallets) and the Bitcoin Explorer need the full Bitcoin "
-                     "history. The full node needs at least %s free." % need]
+        s["text"] = ["The Electrum Server (for hardware wallets), Lightning and the Bitcoin Explorer need the full "
+                     "Bitcoin history. The full node needs at least %s free." % need]
         if free is not None and free >= config.full_min_free_gb * GB and config.mode != "pruned":
             s["text"].append("Your AVADO now has %s free: enough." % avadoweb.human_bytes(free))
             s["buttons"] = [{"action": "use-full", "label": "Switch to the full node", "style": "primary",
