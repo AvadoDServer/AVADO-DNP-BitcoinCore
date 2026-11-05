@@ -63,7 +63,16 @@ from bitcoincore.org and checks its SHA-256 against the release's
 [bitcoin-core/guix.sigs](https://github.com/bitcoin-core/guix.sigs). The page
 and supervisor are Python standard library only (`build/app`); their unit
 tests run during the image build. Everything runs as an unprivileged user; a
-file capability lets the page open port 80.
+file capability lets the page open ports 80 and 443.
+
+**HTTPS.** The page also answers on https://bitcoincore.my.ava.do (port 443) with the box's
+`*.my.ava.do` certificate, the one the Admin and the other AVADO apps with https use (the
+box's DAPPMANAGER serves it at http://dappmanager.my.ava.do; iso.ava.do is the second source).
+Chrome tries https first ("Always use secure connections"), so without it Chrome showed "This
+site doesn't support a secure connection". The certificate is used only when it is for
+`*.my.ava.do`, valid for at least another hour and matches its key; until then the page stays
+http only and it is checked every 5 minutes, after that daily. http works as before, also in
+the Admin's Setup tab. `build/app/avadotls.py` (Python standard library only; the same file in every AVADO package with `avadoweb.py`).
 
 ## Licence and reuse
 

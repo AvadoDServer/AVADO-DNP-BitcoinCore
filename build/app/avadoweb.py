@@ -20,6 +20,10 @@ Protections:
   preflight, which this server never approves, so another web page cannot
   press the buttons for the user.
 - Strict Content-Security-Policy; no inline scripts.
+
+HTTPS: next to port 80 the same page also answers on port 443 with the box's
+*.my.ava.do certificate, once there is a usable one (avadotls.py). Without it
+the page is http only, as before.
 """
 
 import ipaddress
@@ -30,6 +34,8 @@ import threading
 import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import avadotls
 
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -199,7 +205,8 @@ class WebApp:
         self.version = version
         self.title = title
 
-    def serve(self, port=80, host="0.0.0.0"):
+    def serve(self, port=80, host="0.0.0.0", https_port=None):
+        """The page on port; on port 80 also https on 443 (https_port, 0 = off)."""
         app = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -299,4 +306,8 @@ class WebApp:
         thread = threading.Thread(target=server.serve_forever, name="web", daemon=True)
         thread.start()
         log("web page listening on port", port)
+        if https_port is None:
+            https_port = 443 if port == 80 else 0
+        if https_port:
+            self.https = avadotls.serve_https(Handler, port=https_port, host=host, log=log)
         return server

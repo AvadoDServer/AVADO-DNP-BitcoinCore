@@ -1,6 +1,6 @@
 {
   "name": "bitcoincore.avado.dnp.dappnode.eth",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "upstream": "v32.1",
   "title": "Bitcoin Node",
   "description": "Your own Bitcoin node (Bitcoin Core). It downloads and checks every Bitcoin block itself, so your wallet no longer has to trust someone else's server. If your AVADO has at least 1.5 TB free it keeps the full history, which the Electrum Server (to connect hardware wallets such as Sparrow and Electrum) and the Bitcoin Explorer need. With less space it starts in a space-saving mode that keeps only the newest blocks. The first download takes about 1 to 3 days. Its page shows the progress in plain words.",
