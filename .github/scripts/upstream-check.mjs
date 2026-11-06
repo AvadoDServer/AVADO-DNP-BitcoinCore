@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Weekly upstream check: is there a newer stable upstream release than the one
+// Daily upstream check: is there a newer stable upstream release than the one
 // this package pins? Settings live in .github/upstream-check.json.
 //
 //   node .github/scripts/upstream-check.mjs            dry run: prints what it finds, changes nothing
@@ -375,18 +375,14 @@ const md = [
   `Package version: ${pkg.from} → **${pkg.to}**.`,
   "",
   ...(readFirst.length ? ["**Read first**", ...readFirst, ""] : []),
-  "**Checked by the weekly job**",
+  "**Checked by the daily upstream check**",
   ...updates.flatMap((r) => r.notes.map((n) => `- ${n}`)),
   ...results.flatMap((r) => r.warnings.map((w) => `- Note (${r.c.name}): ${w}`)),
   "",
-  "**Before you merge**",
-  "1. Read the release notes above.",
-  "2. Close and reopen this PR to start the Build check (a PR opened by the weekly job does not start it by itself).",
-  "3. Install the build on the test box and check the app page.",
+  "**What happens next**",
+  "The Build starts by itself (build, IPFS upload, start test). When it passes, the update is merged and released automatically on the first bot run 20 hours after this PR's last commit, unless it is a major upgrade (then merge by hand) or you add the `hold` label. Rules: https://github.com/AvadoDServer/ci-release-action/tree/main/automerge",
   "",
-  "Merging builds the release. Boxes get it only after the store is updated.",
-  "",
-  "_Opened by the weekly upstream check (.github/workflows/upstream-check.yml). If a newer version comes out before this is merged, the same PR is updated._",
+  "_Opened by the daily upstream check (.github/workflows/upstream-check.yml). If a newer version comes out first, the same PR is updated._",
 ].join("\n");
 
 if (SUMMARY) writeFileSync(SUMMARY, md + "\n");
