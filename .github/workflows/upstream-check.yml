@@ -1,27 +1,44 @@
 name: Upstream check
-# Once a week: is a newer stable upstream release out than the one this package
+# Once a day: is a newer stable upstream release out than the one this package
 # pins? If so, open (or update) one PR that moves the version, the image digests
-# or checksums and the package version. The owner reviews and merges it.
+# or checksums and the package version. The automerge job merges and releases it once
+# its Build passed (see build.yml).
 # Settings: .github/upstream-check.json. Dry run on a laptop:
 #   node .github/scripts/upstream-check.mjs
 on:
   schedule: [{ cron: "0 6 * * 1" }]
   workflow_dispatch:
-permissions: { contents: write, pull-requests: write }
+permissions: { contents: write, pull-requests: write, actions: write }
 concurrency: { group: upstream-check }
 jobs:
+  # First merge and release an update whose Build passed and whose wait is
+  # over (rules: AvadoDServer/ci-release-action/automerge), then look upstream.
+  automerge:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions: { contents: write, pull-requests: write, actions: read }
+    steps:
+      - uses: AvadoDServer/ci-release-action/automerge@main
+        with:
+          rpcToken: ${{ secrets.RPC_TOKEN }}
+          enabled: ${{ vars.AUTOMERGE }}
   check:
+    needs: automerge
     # A manual run from another branch must never open a PR from unmerged work.
-    if: github.ref == 'refs/heads/main'
+    if: ${{ !cancelled() && (github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
       - id: check
         run: node .github/scripts/upstream-check.mjs --write
         env: { GITHUB_TOKEN: "${{ github.token }}" }
       # With no change this opens nothing and removes a leftover upstream-check branch.
-      - name: Open or update the PR
+      - id: cpr
+        name: Open or update the PR
         uses: peter-evans/create-pull-request@v8
         with:
           branch: upstream-check
@@ -29,3 +46,12 @@ jobs:
           title: ${{ steps.check.outputs.title }}
           body-path: ${{ runner.temp }}/upstream-check.md
           delete-branch: true
+      # The workflow token starts no pull_request workflow: start the Build here.
+      - name: Build the pull request
+        if: steps.cpr.outputs.pull-request-operation == 'created' || steps.cpr.outputs.pull-request-operation == 'updated'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          branch=$(gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json headRefName -q .headRefName)
+          gh workflow run build.yml -R "$GITHUB_REPOSITORY" --ref "$branch" -f pr="$PR"
