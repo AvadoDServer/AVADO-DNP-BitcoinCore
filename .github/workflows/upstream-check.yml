@@ -6,7 +6,7 @@ name: Upstream check
 # Settings: .github/upstream-check.json. Dry run on a laptop:
 #   node .github/scripts/upstream-check.mjs
 on:
-  schedule: [{ cron: "0 6 * * 1" }]
+  schedule: [{ cron: "0 6 * * *" }]
   workflow_dispatch:
 permissions: { contents: write, pull-requests: write, actions: write }
 concurrency: { group: upstream-check }
